@@ -130,7 +130,7 @@ def rounded_rect(canvas, x1, y1, x2, y2, r=12, **kw):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("SRT Subtitle Translator")
+        self.title("Matrix Tool SRT-Translator V1")
         self.geometry("1200x760")
         self.minsize(900, 600)
         self.configure(bg=BG)
@@ -239,9 +239,9 @@ class App(tk.Tk):
         inner.pack(fill="both", expand=True, padx=18, pady=18)
 
         # --- App title ---
-        tk.Label(inner, text="SRT", bg=SIDEBAR_BG,
-                 fg=ACCENT, font=("Segoe UI", 28, "bold")).pack(anchor="w")
-        tk.Label(inner, text="Subtitle Translator", bg=SIDEBAR_BG,
+        tk.Label(inner, text="MATRIX", bg=SIDEBAR_BG,
+                 fg=ACCENT, font=("Segoe UI", 22, "bold")).pack(anchor="w")
+        tk.Label(inner, text="SRT-Translator  V1", bg=SIDEBAR_BG,
                  fg=TXT_DIM, font=("Segoe UI", 10)).pack(anchor="w")
 
         self._sep(inner)
@@ -951,8 +951,8 @@ class App(tk.Tk):
             self._log("\n✅ ĐÃ HOÀN THÀNH TOÀN BỘ!", "ok")
             self.progress_var.set(100)
             # Flash title
-            self.title("✅ Dịch xong! — SRT Subtitle Translator")
-            self.after(3000, lambda: self.title("SRT Subtitle Translator"))
+            self.title("✅ Dịch xong! — Matrix Tool SRT-Translator V1")
+            self.after(3000, lambda: self.title("Matrix Tool SRT-Translator V1"))
         else:
             self._log("\n⏹ Đã dừng.", "warn")
             self.progress_var.set(0)

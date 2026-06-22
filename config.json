@@ -1,0 +1,30 @@
+{
+  "api_keys": [
+    "sk-7GquNArb0C8ipiSmeBZcu7g5HMHc1e7NaOuZPO58gpkRihfn",
+    "sk-t0WSn2DHVLBnAuw5omx020fXDeTZ5nwIepzVM2g6EFIW3uhs",
+    "sk-mMfB64NqV4TAkE6cG9LrBZa2Pjj3fRwr63fjXvaKYCDtltAL",
+    "sk-M6LeM05Xs5s9WZF9d3YrwyX2hPRImyVJ81jzoyO3LY3Zd8xU",
+    "sk-ulGaDu92U0jwbkMavDKlZHP6X3RrKHSgVW0yEdPG6zBEbyo8",
+    "sk-pUw1K2mbCwjUWQ4xspQ4je1ToGoYSYTvLQPlC6GdxW1evL0V",
+    "sk-YkMMXfy8g4hvuKdtncpjDgI8Ltidq10MbPHl0QdBEi3oShTb",
+    "sk-Nd639nrhgO9yTcS5zo2Ugyj5AUPNVirCKVjhsjKyg4x5ScEz",
+    "sk-DSu5OhXWST3AcWofkhJkH6a6Gmjzwk7hf06AlcnTX3ebfh9B",
+    "sk-AVIi5HlHsVAZUX8czOCAfOVELPirTDdXKGAnEZSqDAvbC8tC",
+    "sk-NodoaPqFJfGfmTxtvtyMm8BT73bBiTkjPV9aBqjtpWu62XXu",
+    "sk-JZVYkQKr8l8nIK84WN7aop6L6tRdR7epbq4EodtsLDjH0rwf",
+    "sk-A7S2zH6IZaeXsVQO0FP9Q7voAfAv2TjiBZF7KDyAyRUKxI0f",
+    "sk-zit6psubMJKIvSVVXLXRetCEVjPTR8dSuqPkiHX6w6NXLaYZ",
+    "sk-kBzlWA13rvVCXMGq5cVljMCMltDm8AbVlEFrOvyqUTxMSs9Y",
+    "sk-x4Vmd8pxgZ59fIXJurHBGRMY197niC3hyymc6m6OIqYjMGr7",
+    "sk-5Xh63gQ9hGimrqcwmar1pzLNTGFN2rsCxCYoJV6SnLJGFUjl",
+    "sk-A5DLQ4oS5K7JPHkeOhpDHzaHIOn7iwIuWGTZvjx4eETFRNOi",
+    "sk-36Bv27QHoxr0tIYIPE2EdWw04voxGpEOqCTeW2PnTwZmPHOJ",
+    "sk-cY198zDcVqHhU8d9xwhrNJ280XN9GAfCE79oO96CGS3yaHVm"
+  ],
+  "model": "deepseek-v4-flash",
+  "target_language": "indonesian",
+  "content_type": "auto",
+  "batch_size": 40,
+  "output_subfolder": true,
+  "glossary": {}
+}

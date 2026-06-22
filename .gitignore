@@ -1,6 +1,3 @@
-# ── API keys & secrets ──
-config.json
-
 # ── Python cache ──
 __pycache__/
 *.py[cod]
