@@ -27,7 +27,7 @@ Hỗ trợ tối đa **20 workers song song**, tự động self-healing, và ch
 
 ```bash
 # 1. Clone repo
-git clone https://github.com/YOUR_USERNAME/SRT-Translator.git
+git clone https://github.com/duc1408/SRT-Translator.git
 cd SRT-Translator
 
 # 2. Tạo config từ mẫu
