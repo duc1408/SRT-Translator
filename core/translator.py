@@ -152,6 +152,9 @@ If it continues from the previous block, start with `...`.
 Use everyday, colloquial {lang_name} as heard in films. Match the original tone \
 (casual/formal). Use contractions and natural conversational expressions.
 
+## 4. 100% TARGET LANGUAGE REQUIREMENT
+You MUST translate or transliterate every single word, including character names, locations, and unique terms, into {lang_name}. Absolutely no characters from the original source script (e.g., Chinese characters/Hanzi, Japanese Kanji/Kana, etc.) are allowed to remain in the final output. If a name cannot be translated, transliterate it phonetically using the script of {lang_name}.
+
 # ABSOLUTE FORMATTING RED LINES
 
 1. **STRICT 1-TO-1 BLOCK COUNT**: Output block count MUST exactly equal input block count. \
@@ -211,23 +214,24 @@ def _is_untranslated(
     if src_clean == tgt_clean:
         return True
 
-    # Check 2: Source script still dominates the output
+    # Check 2: Source script characters remain in the output
     # Skip this check if target language uses the same script as source
     target_scripts = set()
     for name, pat in SCRIPT_DETECTORS.items():
         if name == target_lang.lower():
             target_scripts.add(pat)
 
+    # Special case: Japanese and Korean target languages can use Chinese characters (Kanji/Hanja)
+    if target_lang.lower() in ("japanese", "korean", "chinese"):
+        target_scripts.add(CHINESE_RE)
+
     for pat in source_patterns:
         if pat in target_scripts:
             continue  # Target lang uses same script, skip
-        source_chars = len(pat.findall(source_text))
         remain_chars = len(pat.findall(translated_text))
-        # If >60% of source-script chars remain → likely untranslated
-        if source_chars > 2 and remain_chars > 0:
-            ratio = remain_chars / source_chars
-            if ratio > 0.5:
-                return True
+        # If any source-script characters remain in the translation, mark as untranslated
+        if remain_chars > 0:
+            return True
 
     return False
 
