@@ -3,7 +3,7 @@
   "model": "deepseek-v4-flash",
   "target_language": "indonesian",
   "content_type": "auto",
-  "batch_size": 40,
+  "batch_size": 60,
   "output_subfolder": true,
   "glossary": {}
 }

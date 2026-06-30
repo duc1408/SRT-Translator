@@ -9,14 +9,39 @@ import os
 import sys
 import json
 import threading
+import socket
+import ctypes
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 
+# ───────────────────────────────────────────────────────────────────────────
+# Single Instance Lock & Windows Taskbar Icon Fix
+# ───────────────────────────────────────────────────────────────────────────
+try:
+    # Port 54321 chosen as unique identifier for this application
+    _lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    _lock_socket.bind(('127.0.0.1', 54321))
+except socket.error:
+    # Silent exit if another instance is already running
+    sys.exit(0)
+
+try:
+    # Explicitly register AppUserModelID so Windows displays the correct taskbar icon
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("matrix.srt_translator.v1")
+except Exception:
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Ensure project root on sys.path
 # ---------------------------------------------------------------------------
-ROOT = os.path.dirname(os.path.abspath(__file__))
+IS_FROZEN = getattr(sys, 'frozen', False)
+if IS_FROZEN:
+    ROOT = sys._MEIPASS
+else:
+    ROOT = os.path.dirname(os.path.abspath(__file__))
+
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
@@ -45,7 +70,10 @@ FONT_TITLE  = ("Segoe UI",  20, "bold")
 FONT_LABEL  = ("Segoe UI",   9, "bold")
 FONT_BTN    = ("Segoe UI",  11, "bold")
 
-CONFIG_PATH = os.path.join(ROOT, "config.json")
+if IS_FROZEN:
+    CONFIG_PATH = os.path.join(os.path.dirname(sys.executable), "config.json")
+else:
+    CONFIG_PATH = os.path.join(ROOT, "config.json")
 
 SUPPORTED_LANGS = [
     ("Indonesian",          "indonesian"),

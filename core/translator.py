@@ -87,15 +87,18 @@ CONTENT_LABELS = {
 }
 
 # Self-healing constants
-MAX_HEAL_ROUNDS       = 3    # maximum self-healing passes with primary model
-HEAL_BATCH_SIZE       = 20   # smaller batches for precision retries
-BATCH_RETRY_ATTEMPTS  = 4    # retries per individual batch
+# ⚡ Optimized for quota efficiency (A+B plan):
+#   - HEAL_BATCH_SIZE 40: larger heal batches → system prompt overhead ~50% less
+#   - MAX_HEAL_ROUNDS 2:  round 3 rarely helps; saves wasted API calls
+#   - BATCH_RETRY_ATTEMPTS 3: 3 retries sufficient; 4th rarely succeeds
+MAX_HEAL_ROUNDS       = 2    # maximum self-healing passes with primary model
+HEAL_BATCH_SIZE       = 40   # larger batches → less system-prompt overhead per token
+BATCH_RETRY_ATTEMPTS  = 3    # retries per individual batch
 HEAL_RETRY_ATTEMPTS   = 3    # retries per self-healing batch
 
 # Fallback model cascade — tried in order when primary model fails to translate all blocks
-# AI-Box supported models
+# ⚡ Removed deepseek-v4-pro (3x more expensive than flash, marginal quality gain for subtitles)
 FALLBACK_MODELS = [
-    "deepseek-v4-pro",
     "deepseek-v4-flash",
 ]
 
@@ -105,68 +108,41 @@ FALLBACK_MODELS = [
 
 def _build_system_prompt(target_lang: str, content_type: str,
                          glossary: dict = None) -> str:
-    lang_name    = LANG_NAMES.get(target_lang.lower(), target_lang)
+    """
+    Build system prompt for the translation API call.
+    ⚡ Quota-optimized: compressed from ~1100 to ~550 tokens (~50% savings per request).
+    """
+    lang_name     = LANG_NAMES.get(target_lang.lower(), target_lang)
     content_label = CONTENT_LABELS.get(content_type, content_type)
 
     # Build optional glossary block
     glossary_section = ""
     if glossary:
-        lines = [f"  - {src} → {tgt}" for src, tgt in glossary.items() if src and tgt]
+        lines = [f"  {src} → {tgt}" for src, tgt in glossary.items() if src and tgt]
         if lines:
-            glossary_section = (
-                "# GLOSSARY (MANDATORY — apply these terms consistently)\n"
-                + "\n".join(lines)
-                + "\n\n"
-            )
+            glossary_section = "GLOSSARY (apply consistently):\n" + "\n".join(lines) + "\n\n"
 
-    return f"""# ROLE
-You are an expert "Multilingual Dubbing Script Adapter" and "SRT Formatter" \
-specializing in {content_label} content.
-Your exact objective is to translate ONLY the SRT subtitles provided into {lang_name}.
-The output must be a clean, dubbing-ready SRT file where every subtitle block is a \
-natural, spoken line in {lang_name}, strictly aligned one-to-one with the input blocks.
+    return f"""You are an expert {content_label} subtitle translator. Translate the SRT batch into {lang_name} for TTS dubbing.
 
-# CRITICAL PRINCIPLES
+RULES:
+1. PACING: Text is for TTS voiceover — match block duration. Compress aggressively: shortest natural expression, no fillers, no redundant words.
+   - Alphabetic (Indonesian/English/French/Spanish/German/Turkish): use contractions, short synonyms.
+   - CJK (Chinese/Japanese/Korean): target 2.5–3.5 syllables/sec of block duration.
+   - Abugida (Thai/Vietnamese/Hindi): direct phrasing, avoid long compounds.
+   - RTL (Arabic): high semantic density, correct punctuation.
 
-## 1. DUBBING-SAFE PACING & CONCISENESS
-The translated text will be used for TTS voiceover. Study the timestamps — the duration \
-of each block determines how much text can be spoken comfortably. If the translation is \
-too long, the audio will play too fast, causing audio-visual desync.
-- **Aggressive Compression**: Prioritize core meaning using the shortest, most natural \
-spoken expression. Remove filler words, redundant modifiers, simplify complex grammar.
-- **Language-Specific Density**:
-  - Alphabetic scripts (Indonesian, English, French, Spanish, German, Turkish, etc.): \
-Use contractions and short synonyms.
-  - CJK scripts (Chinese, Japanese, Korean): Keep character counts extremely low. \
-Target 2.5–3.5 syllables per second of block duration.
-  - Abugida scripts (Thai, Vietnamese, Hindi): Avoid long compound words. Use direct phrasing.
-  - RTL scripts (Arabic): Ensure high semantic density, correct punctuation positions.
+2. STRICT 1-TO-1 MAPPING: Translate ONLY text inside each block. NO word-shifting between blocks. Count blocks before responding — output count MUST equal input count. Mid-thought blocks: end with `...`; continuing blocks: start with `...`.
 
-## 2. ABSOLUTE 1-TO-1 BLOCK MAPPING & "ZERO-SHIFT" RULE
-- **Local Semantic Equivalence**: Translate ONLY the text inside each individual block.
-- **No Word Shifting**: Do NOT move words or phrases between adjacent blocks.
-- **Ellipsis Bridging**: If a block ends mid-thought, end with `...`. \
-If it continues from the previous block, start with `...`.
+3. 100% {lang_name} OUTPUT — ZERO SOURCE CHARACTERS: Every single word MUST be in {lang_name} only. Absolutely NO Chinese (汉字/Hanzi), Japanese (かな/Kanji), Korean (한글), Arabic (عربي), Thai (ไทย), or Cyrillic (кирилл) characters are allowed in the output — not even in parentheses or as notes. If a proper name cannot be translated, write it phonetically in {lang_name} letters only. Example: 北京 → "Beijing", not "北京" or "Beijing (北京)".
 
-## 3. SPOKEN REGISTER & LOCALIZATION
-Use everyday, colloquial {lang_name} as heard in films. Match the original tone \
-(casual/formal). Use contractions and natural conversational expressions.
+4. REGISTER: Natural spoken {lang_name} as heard in {content_label}. Match original tone (casual/formal).
 
-## 4. 100% TARGET LANGUAGE REQUIREMENT
-You MUST translate or transliterate every single word, including character names, locations, and unique terms, into {lang_name}. Absolutely no characters from the original source script (e.g., Chinese characters/Hanzi, Japanese Kanji/Kana, etc.) are allowed to remain in the final output. If a name cannot be translated, transliterate it phonetically using the script of {lang_name}.
+5. OUTPUT FORMAT:
+   - Wrap result in `<TRANSLATE_TEXT>` tags.
+   - Valid SRT only: index → timestamp → translated text → blank line.
+   - No markdown, no explanations, no comments.
 
-# ABSOLUTE FORMATTING RED LINES
-
-1. **STRICT 1-TO-1 BLOCK COUNT**: Output block count MUST exactly equal input block count. \
-Silently count and verify before responding.
-2. **IMMUTABLE METADATA**: Do NOT alter Index Numbers or Timestamps.
-3. **PURE OUTPUT**: Output ONLY valid SRT content inside `<TRANSLATE_TEXT>` tags. \
-Do NOT wrap in markdown code fences.
-4. **SILENT EXECUTION**: No explanations, comments, or extra text.
-
-{glossary_section}# TASK
-Translate the following SRT batch into {lang_name}.
-Output the result inside `<TRANSLATE_TEXT>` tags."""
+{glossary_section}Translate the following SRT batch into {lang_name} inside `<TRANSLATE_TEXT>` tags."""
 
 
 # ---------------------------------------------------------------------------
@@ -489,10 +465,28 @@ def _translate_chunk(
                     t_map[li] = txt
 
         elif missing_locals and len(missing_locals) == len(local_map):
-            # Total failure — all blocks missing. Log but don't retry here
-            # (will be caught by self-healing later)
+            # Total failure — all blocks missing.
+            # ⚡ Fix: retry immediately once (rate-limit cooldown) before deferring to self-heal.
             if log_cb:
-                log_cb(f"  {label}: toàn bộ batch thất bại, sẽ retry ở vòng self-heal", "error")
+                log_cb(f"  {label}: toàn bộ batch thất bại → đợi 5s rồi retry ngay...", "warn")
+            time.sleep(5)
+            retry_map = _call_with_retry(
+                api_key, model, system_prompt, user_content,
+                max_attempts=2,
+                label=f"{label} (total-fail retry)", log_cb=log_cb,
+            )
+            if retry_map:
+                for li, txt in retry_map.items():
+                    pos = local_map.get(li)
+                    if pos is not None and not _is_untranslated(
+                        batch[pos].text, txt, source_patterns, target_lang
+                    ):
+                        t_map[li] = txt
+                if log_cb:
+                    log_cb(f"  {label}: retry ngay thành công {len(retry_map)} blocks", "ok")
+            else:
+                if log_cb:
+                    log_cb(f"  {label}: retry ngay thất bại → sẽ xử lý ở vòng self-heal", "error")
 
         # ── Merge back into results ──
         for pos, blk in enumerate(batch):

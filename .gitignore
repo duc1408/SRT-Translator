@@ -24,3 +24,11 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+
+# ── Project Specific Configs & Builds ──
+config.json
+dist/
+build/
+*.spec
+"output dịch"/
+output dịch/

@@ -111,11 +111,11 @@ def write_srt(blocks: list, filepath: str) -> None:
 
 def get_output_path(source_path: str, lang_code: str) -> str:
     """
-    Returns output path: <source_dir>/output/<LANG_CODE>/<filename>
+    Returns output path: <source_dir>/output dịch/<LANG_CODE>/<filename>
     """
     src_dir = os.path.dirname(os.path.abspath(source_path))
     filename = os.path.basename(source_path)
-    return os.path.join(src_dir, "output", lang_code, filename)
+    return os.path.join(src_dir, "output dịch", lang_code, filename)
 
 
 LANG_CODE_MAP = {
