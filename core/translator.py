@@ -22,6 +22,7 @@ import re
 import time
 import urllib.request
 import urllib.error
+import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
@@ -370,9 +371,10 @@ def _call_with_retry(
                 log_cb(f"  {label}: response unparseable (attempt {attempt}), retrying...", "warn")
         except urllib.error.HTTPError as exc:
             if exc.code in (429, 503):
-                wait = 2 ** attempt * 2
+                # Add random jitter to prevent "thundering herd" concurrency stampede
+                wait = (2 ** attempt * 2) + random.uniform(0.5, 2.5)
                 if log_cb:
-                    log_cb(f"  {label}: HTTP {exc.code} rate-limit, retry in {wait}s...", "warn")
+                    log_cb(f"  {label}: HTTP {exc.code} rate-limit, retry in {wait:.1f}s...", "warn")
                 time.sleep(wait)
             else:
                 if log_cb:
@@ -402,6 +404,10 @@ def _translate_chunk(
     progress_cb:      Optional[Callable],  # (chunk_idx, n_done)
     log_cb:           Optional[Callable],  # (msg, level)
 ) -> List[SrtBlock]:
+
+    # Add a tiny staggered start delay to spread out requests over time
+    if chunk_idx > 0:
+        time.sleep(chunk_idx * 0.4)
 
     results: List[SrtBlock] = []
     total_batches = (len(blocks) + batch_size - 1) // batch_size
@@ -625,6 +631,49 @@ def translate_file(
                     improved += 1
         return merged_list, improved
 
+    def _heal_parallel(blocks_to_heal: List[SrtBlock], current_model: str, current_prompt: str, current_batch_size: int, label_prefix: str) -> List[SrtBlock]:
+        """Translate a batch of failed blocks in parallel using all available keys."""
+        if not blocks_to_heal:
+            return []
+        
+        # Determine active workers for self-heal
+        heal_workers = min(len(api_keys), 20, len(blocks_to_heal))
+        heal_chunk_size = (len(blocks_to_heal) + heal_workers - 1) // heal_workers
+        heal_chunks = [blocks_to_heal[k : k + heal_chunk_size] for k in range(0, len(blocks_to_heal), heal_chunk_size)]
+        actual_heal_workers = len(heal_chunks)
+        
+        healed_results_map: dict = {}
+        with ThreadPoolExecutor(max_workers=actual_heal_workers) as pool:
+            futures = {
+                pool.submit(
+                    _translate_chunk,
+                    k,
+                    heal_chunks[k],
+                    api_keys[k % len(api_keys)],
+                    current_model,
+                    current_prompt,
+                    current_batch_size,
+                    source_patterns,
+                    target_lang,
+                    None,
+                    log_cb,
+                ): k
+                for k in range(actual_heal_workers)
+            }
+            for fut in as_completed(futures):
+                k = futures[fut]
+                try:
+                    healed_results_map[k] = fut.result()
+                except Exception as exc:
+                    if log_cb:
+                        log_cb(f"   ❌ Self-heal Worker {k+1} failed: {exc}", "error")
+                    healed_results_map[k] = heal_chunks[k]
+                    
+        healed_list = []
+        for k in range(actual_heal_workers):
+            healed_list.extend(healed_results_map.get(k, heal_chunks[k]))
+        return healed_list
+
     # Self-heal with primary model first
     for heal_round in range(1, MAX_HEAL_ROUNDS + 1):
         untranslated = _get_untranslated(merged)
@@ -634,21 +683,15 @@ def translate_file(
         if log_cb:
             log_cb(
                 f"\n🔄 Self-Heal [{heal_round}/{MAX_HEAL_ROUNDS}] (model chính): "
-                f"{len(untranslated)} blocks → retry...", "warn"
+                f"{len(untranslated)} blocks → dịch song song...", "warn"
             )
 
-        heal_key = api_keys[heal_round % len(api_keys)]
-        healed = _translate_chunk(
-            chunk_idx=0,
-            blocks=untranslated,
-            api_key=heal_key,
-            model=model,
-            system_prompt=system_prompt,
-            batch_size=min(HEAL_BATCH_SIZE, batch_size),
-            source_patterns=source_patterns,
-            target_lang=target_lang,
-            progress_cb=None,
-            log_cb=log_cb,
+        healed = _heal_parallel(
+            blocks_to_heal=untranslated,
+            current_model=model,
+            current_prompt=system_prompt,
+            current_batch_size=min(HEAL_BATCH_SIZE, batch_size),
+            label_prefix=f"Self-Heal {heal_round}"
         )
 
         merged, improved = _merge_healed(merged, healed)
@@ -700,25 +743,17 @@ def translate_file(
 
                 if log_cb:
                     log_cb(
-                        f"   ↳ Vòng {fb_round}: {len(untranslated)} blocks | {fallback_model}",
+                        f"   ↳ Vòng {fb_round} (dịch song song): {len(untranslated)} blocks | {fallback_model}",
                         "dim",
                     )
 
-                # Use first available key (rotate between rounds)
-                fb_key = api_keys[fb_round % len(api_keys)]
-
                 try:
-                    healed = _translate_chunk(
-                        chunk_idx=0,
-                        blocks=untranslated,
-                        api_key=fb_key,
-                        model=fallback_model,
-                        system_prompt=fb_system_prompt,
-                        batch_size=min(HEAL_BATCH_SIZE, batch_size),
-                        source_patterns=source_patterns,
-                        target_lang=target_lang,
-                        progress_cb=None,
-                        log_cb=log_cb,
+                    healed = _heal_parallel(
+                        blocks_to_heal=untranslated,
+                        current_model=fallback_model,
+                        current_prompt=fb_system_prompt,
+                        current_batch_size=min(HEAL_BATCH_SIZE, batch_size),
+                        label_prefix=f"Fallback {fb_idx+1} round {fb_round}"
                     )
 
                     merged, improved = _merge_healed(merged, healed)
