@@ -1,0 +1,5 @@
+{
+  "version": "1.0.1",
+  "url": "https://github.com/duc1408/SRT-Translator/releases/latest/download/SRT-Translator.exe",
+  "changelog": "Tối ưu hóa rate-limit, song song hóa Self-Heal và sửa lỗi timeout."
+}

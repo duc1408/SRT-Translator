@@ -152,6 +152,12 @@ def rounded_rect(canvas, x1, y1, x2, y2, r=12, **kw):
 
 
 # ---------------------------------------------------------------------------
+# Version & Updates
+# ---------------------------------------------------------------------------
+APP_VERSION = "1.0.0"
+
+
+# ---------------------------------------------------------------------------
 # Main Application Window
 # ---------------------------------------------------------------------------
 
@@ -177,6 +183,9 @@ class App(tk.Tk):
         # Make window resizable with minimum
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
+
+        # Check for updates in a background thread
+        threading.Thread(target=self._check_for_updates, daemon=True).start()
 
     # ------------------------------------------------------------------ icon
     def _set_icon(self):
@@ -984,6 +993,80 @@ class App(tk.Tk):
         else:
             self._log("\n⏹ Đã dừng.", "warn")
             self.progress_var.set(0)
+
+    # ------------------------------------------------------------------
+    # Auto-Update System (GitHub Releases)
+    # ------------------------------------------------------------------
+    def _check_for_updates(self):
+        # Only check updates if frozen (compiled EXE) to avoid breaking development workspace
+        if not getattr(sys, 'frozen', False):
+            return
+
+        import urllib.request
+        import re
+
+        url = "https://raw.githubusercontent.com/duc1408/SRT-Translator/main/version.json"
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                
+            latest_version = data.get("version", "1.0.0")
+            download_url = data.get("url")
+            changelog = data.get("changelog", "")
+
+            def parse_ver(v):
+                return [int(x) for x in re.sub(r'[^\d.]', '', v).split('.')]
+
+            if parse_ver(latest_version) > parse_ver(APP_VERSION):
+                # Found update! Prompt in the main UI thread
+                self.after(0, lambda: self._prompt_update(latest_version, download_url, changelog))
+        except Exception:
+            pass
+
+    def _prompt_update(self, latest_ver: str, download_url: str, changelog: str):
+        msg = f"Đã có phiên bản mới v{latest_ver}!\n\nNội dung cập nhật:\n{changelog}\n\nBạn có muốn tự động cập nhật ngay không?"
+        if messagebox.askyesno("Cập nhật phần mềm", msg):
+            self.start_btn.config(state="disabled")
+            self._log(f"\n[CẬP NHẬT] Đang tải phiên bản mới v{latest_ver}...", "warn")
+            threading.Thread(target=self._download_update, args=(download_url,), daemon=True).start()
+
+    def _download_update(self, download_url: str):
+        import urllib.request
+        import shutil
+
+        exe_dir = os.path.dirname(sys.executable)
+        new_exe_path = os.path.join(exe_dir, "SRT-Translator_new.exe")
+        old_exe_path = os.path.join(exe_dir, "SRT-Translator.exe")
+        bat_path = os.path.join(exe_dir, "update.bat")
+
+        try:
+            req = urllib.request.Request(download_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=60) as response, open(new_exe_path, 'wb') as out_file:
+                shutil.copyfileobj(response, out_file)
+
+            # Create the hot-swap update batch script
+            bat_content = f"""@echo off
+timeout /t 1 /nobreak >nul
+del /f /q "{old_exe_path}"
+rename "{new_exe_path}" "SRT-Translator.exe"
+start "" "SRT-Translator.exe"
+del "%~f0"
+"""
+            with open(bat_path, "w", encoding="ascii") as f:
+                f.write(bat_content)
+
+            self.after(0, lambda: self._apply_update_and_restart(bat_path))
+        except Exception as e:
+            self._log(f"\n❌ Lỗi tải bản cập nhật: {e}", "error")
+            self.after(0, lambda: self.start_btn.config(state="normal"))
+
+    def _apply_update_and_restart(self, bat_path: str):
+        import subprocess
+        # Execute batch script detached
+        subprocess.Popen(["cmd.exe", "/c", bat_path], shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        self.destroy()
+        sys.exit(0)
 
 # ---------------------------------------------------------------------------
 # Entry point
